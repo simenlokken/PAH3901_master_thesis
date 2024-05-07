@@ -1,0 +1,137 @@
+---
+title: "HUNT 3-4"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+## Set environment and load packages
+
+## Process data
+
+```{r}
+
+hunt_3_4 <- read_csv("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_3_4.csv")
+```
+
+Add a column that holds the trajectory group for each individual:
+
+```{r}
+
+glimpse(hunt_3_4)
+
+hunt_3_4 <- hunt_3_4 |> 
+  process_hunt_3_4() |> 
+  mutate(
+    trajectory_group = as_factor(case_when(
+        ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Low" ~ "Below recommended, below recommended",
+        ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Moderate/high" ~ "Below recommended, recommended",
+        ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Low" ~ "Recommended, below recommended",
+        ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Moderate/high" ~ "Recommended, recommended")
+      ),
+    trajectory_group = relevel(trajectory_group, ref = "Below recommended, below recommended")
+  )
+```
+
+## Analyses
+
+### Un-stratified
+
+#### Crude
+
+```{r}
+
+hunt_3_4_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex, id = w22_0389_lopenr_person, data = hunt_3_4)
+
+exp(confint(hunt_3_4_crude_mod))
+```
+
+#### Multi-adjusted
+
+```{r}
+  
+hunt_3_4_multi_mod <- coxph(Surv(follow_up_time, death_all) ~ age + sex + trajectory_group + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_fly_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3_4)
+
+exp(confint(hunt_3_4_multi_mod))
+```
+
+#### Follow-up time and event distribution
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_3_4, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_3_4, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+### Stratified
+
+```{r}
+
+hunt_3_4_low <- hunt_3_4 |> 
+  filter(wor_tit_isco1_nt3bli == "low")
+
+hunt_3_4_high <- hunt_3_4 |> 
+  filter(wor_tit_isco1_nt3bli == "high")
+```
+
+#### Multi-adjusted Cox regression
+
+Low:
+
+```{r}
+
+hunt_3_4_multi_mod_low <- coxph(Surv(follow_up_time, death_all) ~ age + sex + trajectory_group + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_fly_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3_4_low)
+
+exp(confint(hunt_3_4_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_3_4_multi_mod_high <- coxph(Surv(follow_up_time, death_all) ~ age + sex + trajectory_group + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_fly_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3_4_high)
+
+exp(confint(hunt_3_4_multi_mod_high))
+```
+
+###### Follow-up time and event distribution
+
+Low:
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_3_4_low, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_3_4_low, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+High:
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_3_4_high, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_3_4_high, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+## Descriptive statistics
+

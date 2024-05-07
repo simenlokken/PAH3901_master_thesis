@@ -1,0 +1,291 @@
+---
+title: "Data preparation"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+This script is for the general data processing. It does the following:
+
+1.  Load the un-cleaned data set from NTNU NICE area containing data from all four HUNT surveys
+
+2.  Initial cleaning of the full data set
+
+    -   Primarily changing variable types
+
+3.  Distinguishes data sets for each specific analyses into separate data sets
+
+    -   LTPA baseline
+        -   H1
+        -   H3
+        -   H4
+    -   LTPA change
+        -   H1-H3
+        -   H3-H4
+        -   H1-H3-H4
+
+Note that parts of the thesis' analyses are performed in Stata (categorizing LTPA groups for change), so there are some data that are further processed there. Stata code is available at the project's GitHub.
+
+## Set environment and load packages
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  echo = TRUE
+)
+```
+
+```{r}
+
+library(dplyr)
+library(readr)
+library(tibble)
+library(arrow)
+library(lubridate)
+library(forcats)
+```
+
+## Load data
+
+```{r}
+
+full_data <- read_parquet("//fil.nice.ntnu.no/nice/p758/data/my_data/full_data.parquet")
+```
+
+The data set below is the cleaned data set containing all the data for all four surveys. It is added here for easy read-in.
+
+```{r}
+
+full_cleaned_data <- read_parquet("//fil.nice.ntnu.no/nice/p758/data/my_data/full_cleaned_data.parquet")
+```
+
+## Process data
+
+### Basic processing
+
+Un-capitalizing names, change variable types and create date-time objects.
+
+```{r}
+
+# Un-capitalize and clean names
+
+full_cleaned_data <- full_data |>
+  janitor::clean_names()
+
+# Remove initial data frame
+
+rm(full_data)
+
+# Change from characters to factors
+
+full_cleaned_data <- full_cleaned_data |>
+  mutate_if(is.character, as.factor)
+
+# Manually change actual chr back to fct again
+
+full_cleaned_data <- full_cleaned_data |>
+  mutate(
+    birth_date = as.character(birth_date),
+    end_date_death = as.character(end_date_death),
+    end_date_icd8910 = as.character(end_date_icd8910),
+    end_date_link = as.character(end_date_link),
+    w22_0389_lopenr_person = as.character(w22_0389_lopenr_person),
+    death_all = as.factor(death_all),
+    death_all_icd = as.factor(death_all_icd),
+    death_cvd = as.factor(death_cvd),
+    death_ihd = as.factor(death_ihd),
+    death_stroke = as.factor(death_stroke),
+    death_ihd = as.factor(death_ihd)
+    )
+
+# Create date objects
+
+full_cleaned_data <- full_cleaned_data |>
+  mutate(
+    part_dat_nt1blq1 = dmy(part_dat_nt1blq1),
+    part_dat_nt2blq1 = dmy(part_dat_nt2blq1),
+    part_dat_nt3blq1 = dmy(part_dat_nt3blq1),
+    part_dat_nt4blq1 = dmy(part_dat_nt4blq1),
+    end_date_death = dmy(end_date_death),
+    end_date_link = dmy(end_date_link),
+    end_date_icd8910 = dmy(end_date_icd8910),
+    eof_date_death = dmy(eof_date_death)
+  )
+
+# Compute participant age
+
+full_cleaned_data <- full_cleaned_data |>
+  mutate(age = year(end_date_death) - birth_year)
+
+# Write to NTNU NICE area
+
+write_parquet(
+  full_cleaned_data,
+  "//fil.nice.ntnu.no/nice/p758/data/my_data/full_cleaned_data.parquet"
+)
+```
+
+### Distinguish different HUNT surveys into separate data frames
+
+#### Data frames for no change in LTPA
+
+Since all the data for all four surveys are in one data set, we have to distinguish them into four separate data sets. Each survey has two variables called BLM and a variable related to each sub-survey. We use these to distinguish.
+
+#### HUNT 1
+
+Q2 is the relevant Q for H1, it contains data on exercise, work, education, smoking and alcohol
+
+```{r}
+
+hunt_1 <- full_cleaned_data |> 
+  select(contains(match = "nt1"), age, sex, end_date_death, death_all, w22_0389_lopenr_person) |> 
+  filter(!is.na(part_nt1blq2) & !is.na(part_nt1blm))
+
+write_parquet(
+  hunt_1,
+  "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1.parquet"
+)
+```
+
+#### HUNT 3
+
+Q1 is the relevant for Q for H3, it contains data on exercise, work, education, smoking and alcohol
+
+```{r}
+
+hunt_3 <- full_cleaned_data |> 
+  select(contains(match = "nt3"), age, sex, end_date_death, death_all, w22_0389_lopenr_person) |> 
+  filter(!is.na(part_nt3blq1) & !is.na(part_nt3blm))
+
+write_parquet(
+  hunt_3,
+  "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_3.parquet"
+)
+```
+
+#### HUNT 4
+
+Have no information on the surveys, so just did a filtering on baseline measurements (i.e, blm variable)
+
+```{r}
+
+hunt_4 <- full_cleaned_data |>
+  select(contains(match = "nt4"), age, sex, end_date_death, death_all, w22_0389_lopenr_person) |> 
+  filter(!is.na(part_nt4blm))
+
+write_parquet(
+  hunt_4,
+  "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_4.parquet"
+)
+```
+
+#### Data frames for change in LTPA
+
+The data processing for these data frames is done in both Stata and in R. The basic processing of distinguishing into different data frames and string manipulation is done in R, while dividing participants into LTPA trajectory groups are done in Stata and in R. This means that the data is written to a .csv here before Stata processing, and read in as a .csv after its been processed in Stata.
+
+The string manipulation is performed so the questionnaire's answers are the same across all surveys, or else we could not have created LTPA trajectory groups.
+
+#### HUNT 1-3
+
+Distinguish into a data frame and string manipulation:
+
+```{r}
+
+hunt_1_3 <- full_cleaned_data |> 
+  select(contains(match = c("nt1", "nt3")), end_date_death, death_all, age, sex, w22_0389_lopenr_person) |> 
+  filter(
+    !is.na(part_nt1blq2) & !is.na(part_nt1blm) & !is.na(part_nt3blq1) & !is.na(part_nt3blq1)
+    ) |> 
+   mutate(
+    exe_du_nt1blq2 = case_when(
+      exe_du_nt1blq2 == "16-30 minutter" ~ "15-29 minutter",
+      exe_du_nt1blq2 == "30 minutter-1 time" ~ "30-60 minutter",
+      exe_du_nt1blq2 == "Mer enn 1 time" ~ "Mer enn 60 minutter",
+      .default = exe_du_nt1blq2
+    ),
+    exe_du_nt3blq1 = case_when(
+      exe_du_nt3blq1 == "30 minutter - 1 time" ~ "30-60 minutter",
+      exe_du_nt3blq1 == "Mer enn 1 time" ~ "Mer enn 60 minutter",
+      .default = exe_du_nt3blq1
+    )
+   )
+```
+
+Write to disk for further Stata manipulation:
+
+```{r}
+
+# write_csv(
+#   hunt_1_3,
+#   "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1_3.csv"
+# )
+```
+
+The process is repeated for H1-H3-H4 and H3-H4 as well.
+
+**Note: These .csv files must not be written to disk in this script because they will overwrite the ones processed in Stata.**
+
+#### HUNT 1-3-4
+
+```{r}
+
+hunt_1_3_4 <- full_cleaned_data |> 
+  select(contains(match = c("nt1", "nt3", "nt4")), end_date_death, death_all, age, sex, w22_0389_lopenr_person) |> 
+  filter(
+    !is.na(part_nt1blq2) & !is.na(part_nt1blm) 
+    & !is.na(part_nt3blq1) & !is.na(part_nt3blq1)
+    & !is.na(part_nt4blm)
+    ) |> 
+   mutate(
+    exe_du_nt1blq2 = case_when(
+      exe_du_nt1blq2 == "16-30 minutter" ~ "15-29 minutter",
+      exe_du_nt1blq2 == "30 minutter-1 time" ~ "30-60 minutter",
+      exe_du_nt1blq2 == "Mer enn 1 time" ~ "Mer enn 60 minutter",
+      .default = exe_du_nt1blq2
+    ),
+    exe_du_nt3blq1 = case_when(
+      exe_du_nt3blq1 == "30 minutter - 1 time" ~ "30-60 minutter",
+      exe_du_nt3blq1 == "Mer enn 1 time" ~ "Mer enn 60 minutter",
+      .default = exe_du_nt3blq1
+    )
+   )
+```
+
+```{r}
+
+# write_csv(
+#   hunt_1_3_4,
+#   "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1_3_4.csv"
+# )
+```
+
+#### HUNT 3-4
+
+```{r}
+
+hunt_3_4 <- full_cleaned_data |> 
+  select(contains(match = c("nt3", "nt4")), end_date_death, death_all, age, sex, w22_0389_lopenr_person) |> 
+  filter(
+    !is.na(part_nt3blq1) & !is.na(part_nt3blq1) & !is.na(part_nt4blm)
+    ) |> 
+   mutate(
+    exe_du_nt3blq1 = case_when(
+      exe_du_nt3blq1 == "30 minutter - 1 time" ~ "30-60 minutter",
+      exe_du_nt3blq1 == "Mer enn 1 time" ~ "Mer enn 60 minutter",
+      .default = exe_du_nt3blq1
+    )
+   )
+```
+
+```{r}
+
+# write_csv(
+#   hunt_3_4,
+#   "//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_3_4.csv"
+# )
+```

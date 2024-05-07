@@ -1,0 +1,549 @@
+---
+title: "Functions"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+This script contains functions that have been used throughout the analyses for the thesis.
+
+## Data processing functions
+
+### No change in LTPA
+
+#### HUNT 1
+
+##### Quasi-continous PA variable (min/week)
+
+```{r}
+
+process_hunt_1 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    mutate(
+      # Create continuous LTPA variable
+      exe_du_nt1blq2 = case_when(
+        exe_du_nt1blq2 == "Mindre enn 15 minutter" ~ 7.5,
+        exe_du_nt1blq2 == "16-30 minutter" ~ 22.5,
+        exe_du_nt1blq2 == "30 minutter-1 time" ~ 45,
+        exe_du_nt1blq2 == "Mer enn 1 time" ~ 75,
+        TRUE ~ NA # Set all cases who do not meet any of the logic above to be NA, they're being dropped later
+      ),
+      exe_f_nt1blq2 = case_when(
+        exe_f_nt1blq2 == "En gang i uka" ~ 1,
+        exe_f_nt1blq2 == "2-3 ganger i uka" ~ 2.5,
+        exe_f_nt1blq2 == "Omtrent hver dag" ~ 5,
+        TRUE ~ NA # Set all cases who do not meet any of the logic above to be NA, they're being dropped later
+      )
+    ) |> 
+    # Drop those cases who have NA on duration and frequency above before computing LTPA hrs/week
+    drop_na(
+      exe_du_nt1blq2,
+      exe_f_nt1blq2
+    ) |> 
+    mutate(
+      # Compute LTPA hrs/week
+      ltpa_hrs_per_week = exe_du_nt1blq2 * exe_f_nt1blq2 / 60,
+    # Change covariates to factors
+    death_all = as_factor(death_all),
+    sex = as_factor(sex),
+    alc_fl2w_nt1blq2 = as_factor(alc_fl2w_nt1blq2),
+    smo_stat_nt1blq2 = as_factor(smo_stat_nt1blq2),
+    educ_nt1blq2 = as_factor(educ_nt1blq2),
+    # Impute participation dates for those who have missing values on entry date
+    part_dat_nt1blq1 = case_when(
+      is.na(part_dat_nt1blq1) ~ as_date("1984-02-15"),
+      TRUE ~ part_dat_nt1blq1
+      ),
+    # Create follow-up time variable
+    follow_up_time = round(as.numeric(end_date_death - part_dat_nt1blq1) / 365.25, 1),
+    # Create socioeconomic class variable, low/high
+    educ_nt1blq2 = as_factor(case_when(
+      educ_nt1blq2 %in% c(
+        "7-årig folkeskole eller kortere", 
+        "9-årig grunnskole", 
+        "Real- eller middelskole, grunnskolen 10.år", 
+        "Framhalds- eller fortsettelsesskole") ~ "low",
+      educ_nt1blq2 %in% c(
+        "Høyskole eller universitet, 4 år eller mer", 
+        "Høyskole eller universitet, mindre enn 4 år",
+        "Ett- eller toårig videregående skole", 
+        "Artium, økonomisk gymnas eller almenfaglig retning i vgs.") ~ "high")
+      )
+    ) |> 
+    # Select relevant variables for analyses
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      part_dat_nt1blq1,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst2_nt1blm,
+      bmi_nt1blm,
+      alc_fl2w_nt1blq2,
+      smo_stat_nt1blq2,
+      educ_nt1blq2,
+      exe_du_nt1blq2,
+      exe_f_nt1blq2,
+      ltpa_hrs_per_week,
+    ) |> 
+    # Drop all NA's as this will happen in the Cox model anyhow. It also make sure we analyze the same sample in both crude and multi-adjusted analyses
+    drop_na() |> 
+    # Use pmin() to limit follow-up time to be 10 years
+    mutate(
+      follow_up_time = pmin(follow_up_time, 10)
+    )
+  return(dataframe)
+  }
+```
+
+#### HUNT 3
+
+##### Quasi-continuous PA variable (min/week)
+
+```{r}
+
+process_hunt_3 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    mutate(
+      # Create continuous LTPA variable
+      exe_du_nt3blq1 = case_when(
+        exe_du_nt3blq1 == "Mindre enn 15 minutter" ~ 7.5,
+        exe_du_nt3blq1 == "15-29 minutter" ~ 22.5,
+        exe_du_nt3blq1 == "30 minutter - 1 time" ~ 45,
+        exe_du_nt3blq1 == "Mer enn 1 time" ~ 75,
+        TRUE ~ NA
+      ),
+      exe_f_nt3blq1 = case_when(
+        exe_f_nt3blq1 == "En gang i uka" ~ 1,
+        exe_f_nt3blq1 == "2-3 ganger i uka" ~ 2.5,
+        exe_f_nt3blq1 == "Omtrent hver dag" ~ 5,
+        TRUE ~ NA
+      )
+    ) |> 
+    # Drop those cases who have NA on duration and frequency above before computing LTPA hrs/week
+    drop_na(
+      exe_du_nt3blq1,
+      exe_f_nt3blq1
+    ) |> 
+    mutate(
+      # Compute LTPA hrs/week
+      ltpa_hrs_per_week = exe_du_nt3blq1 * exe_f_nt3blq1 / 60,
+    # Change covariates to factors
+    death_all = as_factor(death_all),
+    sex = as_factor(sex),
+    smo_stat_nt3blq1 = as_factor(smo_stat_nt3blq1),
+    wor_tit_isco1_nt3bli = as_factor(wor_tit_isco1_nt3bli),
+    # Impute participation date manually for those who have missing values
+      part_dat_nt3blq1 = case_when(
+        is.na(part_dat_nt3blq1) ~ as_date("2006-10-15"),
+        TRUE ~ part_dat_nt3blq1
+      ),
+    # Create follow-up time variable
+      follow_up_time = round(as.numeric(end_date_death - part_dat_nt3blq1) / 365.25, 1),
+    # Create socioeconomic class variable
+    wor_tit_isco1_nt3bli = as_factor(
+     case_when(
+       wor_tit_isco1_nt3bli %in% c(
+         "Yrker uten krav til utdanning",
+         "Yrker innen jordbruk, skogbruk og fiske",
+         "Prosess- og maskinoperatører, transportarbeidere mv.",
+         "Kontor- og kundeserviceyrker",
+         "Salgs-, service- og omsorgsyrker",
+         "Håndverkere o.l."
+       ) ~ "low",
+       wor_tit_isco1_nt3bli %in% c(
+        "Militære yrker og uoppgitt",
+        "Administrative ledere og politikere", 
+        "Akademiske yrker", 
+        "Yrker med kortere høyskole- og universitetsutdanning og teknikere"
+       ) ~ "high")
+      )
+    ) |> 
+    # Select relevant variables for analyses
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      part_dat_nt3blq1,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst_mn23_nt3blm,
+      bmi_nt3blm,
+      alc_tot_unit_w_nt3blq1,
+      smo_stat_nt3blq1,
+      wor_tit_isco1_nt3bli,
+      exe_du_nt3blq1,
+      exe_f_nt3blq1,
+      ltpa_hrs_per_week
+    ) |> 
+    # Drop all NA's
+  drop_na() |> 
+  # Use pmin() to limit follow-up time to be 10 years
+    mutate(
+      follow_up_time = pmin(follow_up_time, 10)
+    )  
+  return(dataframe)
+}
+```
+
+#### HUNT 4
+
+#### Quasi-continous PA variable (min/week)
+
+There is an extra process happening here compared to H1 and H3 functions because we have to remove five participants who misunderstood the LTPA questions. We remove participants who did not give an answer on frequency but gave an answer on duration.
+
+```{r}
+
+process_hunt_4 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    # Filter out those participants who misunderstood the questions, see explanation above code block
+    filter(
+     (!exe_f_nt4blq1 == "Aldri" | !exe_f_nt4blq1 == "Sjeldnere enn en gang i uka")
+     & !is.na(exe_du_nt4blq1)
+    ) |>
+    mutate(
+      # Create continuous LTPA variable
+      exe_du_nt4blq1 = case_when(
+        exe_du_nt4blq1 == "Mindre enn 15 minutter" ~ 7.5,
+        exe_du_nt4blq1 == "15-29 minutter" ~ 22.5,
+        exe_du_nt4blq1 == "30-60 minutter" ~ 45,
+        exe_du_nt4blq1 == "Mer enn 60 minutter" ~ 75,
+        TRUE ~ NA
+      ),
+      exe_f_nt4blq1 = case_when(
+        exe_f_nt4blq1 == "En gang i uka" ~ 1,
+        exe_f_nt4blq1 == "2-3 ganger i uka" ~ 2.5,
+        exe_f_nt4blq1 == "Omtrent hver dag" ~ 5,
+        TRUE ~ NA
+      )
+    ) |> 
+    # Drop those cases who have NA on duration and frequency above before computing LTPA hrs/week
+    drop_na(
+      exe_f_nt4blq1,
+      exe_du_nt4blq1
+    ) |> 
+    mutate(
+      # Compute LTPA hrs/week
+      ltpa_hrs_per_week = exe_du_nt4blq1 * exe_f_nt4blq1 / 60,
+    # Change covariates to factors
+    death_all = as_factor(death_all),
+    sex = as_factor(sex),
+    smo_stat_nt4blq1 = as_factor(smo_stat_nt4blq1),
+    educ_nt4blq1 = as_factor(educ_nt4blq1),
+    # Impute participation date for those who have missing values
+      part_dat_nt4blq1 = case_when(
+        is.na(part_dat_nt4blq1) ~ as_date("2017-05-15"),
+        TRUE ~ part_dat_nt4blq1
+      ),
+    # Create follow-up time variable
+      follow_up_time = round(as.numeric(end_date_death - part_dat_nt4blq1) / 365.25, 1),
+    # Create socioeconomic class variable
+        educ_nt4blq1 = as_factor(
+      case_when(
+        educ_nt4blq1 %in% c(
+          "Grunnskole",
+          "Fagbrev eller svennebrev"
+        ) ~ "low",
+        educ_nt4blq1 %in% c(
+          "1-2årig videregående skole",
+          "3 år i videregående skole",
+          "Høyskole/universitet, mindre enn 4 år",
+          "Høyskole/universitet, 4 år eller mer"
+        ) ~ "high")
+        )
+    ) |> 
+    # Select relevant variables for analyses
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      part_dat_nt4blq1,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst_mn23_nt4blm,
+      bmi_nt4blm,
+      alc_tot_unit_w_nt4blq1,
+      smo_stat_nt4blq1,
+      educ_nt4blq1,
+      exe_du_nt4blq1,
+      exe_f_nt4blq1,
+      ltpa_hrs_per_week
+    ) |> 
+    # Drop NA's
+    drop_na() |>
+    # Use pmin() to limit follow-up time to be 10 years
+    mutate(
+      follow_up_time = pmin(follow_up_time, 10)
+    )
+  return(dataframe)
+}
+```
+
+### Change in LTPA
+
+There is one data processing function related to each analyses, that is:
+
+1.  H1-H3
+2.  H1-H3-H4
+3.  H3-H4
+
+#### H1-H3
+
+```{r}
+
+process_hunt_1_3 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    mutate(
+      # Add date to those who don't have it
+      part_dat_nt3blq1 = case_when(
+        is.na(part_dat_nt3blq1) ~ as_date("2008-06-15"),
+        TRUE ~ part_dat_nt3blq1
+      ),
+      # Compute follow-up time and do some variable type manipulation
+      follow_up_time = round(as.numeric(end_date_death - part_dat_nt3blq1) / 365.25, 1), # 365.25 to adjust for leap years
+      death_all = as_factor(death_all),
+      sex = as_factor(sex),
+      alc_fl2w_nt1blq2 = as_factor(alc_fl2w_nt1blq2),
+      smo_stat_nt1blq2 = as_factor(smo_stat_nt1blq2),
+      educ_nt1blq2 = as_factor(educ_nt1blq2),
+      ltpa_group_nt1 = as_factor(ltpa_group_nt1),
+      ltpa_group_nt3 = as_factor(ltpa_group_nt3),
+      # Create socioeconomic class variable
+      educ_nt1blq2 = as_factor(case_when(
+        educ_nt1blq2 %in% c(
+          "7-årig folkeskole eller kortere", 
+          "9-årig grunnskole", 
+          "Real- eller middelskole, grunnskolen 10.år", 
+          "Framhalds- eller fortsettelsesskole") ~ "low",
+        educ_nt1blq2 %in% c(
+          "Høyskole eller universitet, 4 år eller mer", 
+          "Høyskole eller universitet, mindre enn 4 år",
+          "Ett- eller toårig videregående skole", 
+          "Artium, økonomisk gymnas eller almenfaglig retning i vgs.") ~ "high")
+        )
+    ) |>
+    # Select relevant variables
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst2_nt1blm,
+      bmi_nt1blm,
+      alc_fl2w_nt1blq2,
+      smo_stat_nt1blq2,
+      educ_nt1blq2,
+      ltpa_group_nt1,
+      ltpa_group_nt3
+    ) |> 
+    # Drop all NA's as this will happen in the Cox model anyhow, we also ensure equal participants on crude and multi-adjusted analyses
+    drop_na()
+  return(dataframe)
+}
+```
+
+#### H1-H3-H4
+
+```{r}
+
+process_hunt_1_3_4 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    mutate(
+      part_dat_nt4blq1 = case_when(
+        is.na(part_dat_nt4blq1) ~ as_date("2017-05-15"),
+        TRUE ~ part_dat_nt4blq1
+      ),
+      follow_up_time = round(as.numeric(end_date_death - part_dat_nt4blq1) / 365.25, 1),
+      death_all = as_factor(death_all),
+      sex = as_factor(sex),
+      alc_fl2w_nt1blq2 = as_factor(alc_fl2w_nt1blq2),
+      smo_stat_nt1blq2 = as_factor(smo_stat_nt1blq2),
+      educ_nt1blq2 = as_factor(educ_nt1blq2),
+      ltpa_group_nt1 = as_factor(ltpa_group_nt1),
+      ltpa_group_nt3 = as_factor(ltpa_group_nt3),
+      ltpa_group_nt4 = as_factor(ltpa_group_nt4),
+      # Create socioeconomic class variable, low/high
+      educ_nt1blq2 = as_factor(case_when(
+        educ_nt1blq2 %in% c(
+          "7-årig folkeskole eller kortere", 
+          "9-årig grunnskole", 
+          "Real- eller middelskole, grunnskolen 10.år", 
+          "Framhalds- eller fortsettelsesskole") ~ "low",
+        educ_nt1blq2 %in% c(
+          "Høyskole eller universitet, 4 år eller mer", 
+          "Høyskole eller universitet, mindre enn 4 år",
+          "Ett- eller toårig videregående skole", 
+          "Artium, økonomisk gymnas eller almenfaglig retning i vgs.") ~ "high")
+        )
+    ) |> 
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      part_dat_nt4blq1,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst2_nt1blm,
+      bmi_nt1blm,
+      alc_fl2w_nt1blq2,
+      smo_stat_nt1blq2,
+      educ_nt1blq2,
+      ltpa_group_nt1,
+      ltpa_group_nt3,
+      ltpa_group_nt4
+    ) |> 
+    # Drop all NA's
+    drop_na()
+  return(dataframe)
+}
+```
+
+#### H3-H4
+
+```{r}
+process_hunt_3_4 <- function(dataframe) {
+  dataframe <- dataframe |> 
+    mutate(
+      part_dat_nt4blq1 = case_when(
+        is.na(part_dat_nt4blq1) ~ as_date("2017-05-15"),
+        TRUE ~ part_dat_nt4blq1
+      ),
+      follow_up_time = round(as.numeric(end_date_death - part_dat_nt4blq1) / 365.25, 1),
+      death_all = as_factor(death_all),
+      sex = as_factor(sex),
+      alc_fly_nt3blq1 = as_factor(alc_fly_nt3blq1),
+      smo_stat_nt3blq1 = as_factor(smo_stat_nt3blq1),
+      wor_tit_isco1_nt3bli = as_factor(wor_tit_isco1_nt3bli),
+      ltpa_group_nt3 = as_factor(ltpa_group_nt3),
+      ltpa_group_nt4 = as_factor(ltpa_group_nt4),
+      wor_tit_isco1_nt3bli = as_factor(
+       case_when(
+         wor_tit_isco1_nt3bli %in% c(
+           "Yrker uten krav til utdanning",
+           "Yrker innen jordbruk, skogbruk og fiske",
+           "Prosess- og maskinoperatører, transportarbeidere mv.",
+           "Kontor- og kundeserviceyrker",
+           "Salgs-, service- og omsorgsyrker", 
+           "Håndverkere o.l."
+         ) ~ "low",
+         wor_tit_isco1_nt3bli %in% c(
+          "Militære yrker og uoppgitt",
+          "Administrative ledere og politikere", 
+          "Akademiske yrker", 
+          "Yrker med kortere høyskole- og universitetsutdanning og teknikere"
+         ) ~ "high")
+        )
+    ) |> 
+    select(
+      w22_0389_lopenr_person,
+      age,
+      sex,
+      part_dat_nt3blq1,
+      end_date_death,
+      follow_up_time,
+      death_all,
+      bp_syst_mn23_nt3blm,
+      bmi_nt3blm,
+      alc_fly_nt3blq1,
+      smo_stat_nt3blq1,
+      wor_tit_isco1_nt3bli,
+      ltpa_group_nt3,
+      ltpa_group_nt4
+    ) |> 
+    drop_na()
+  return(dataframe)
+}
+```
+
+## Cox regression
+
+Fit Cox model function:
+
+```{r}
+
+fit_cox_model <- function(data, stratum = NULL, covariates) {
+  models <- list()
+  
+  if (!is.null(stratum)) {
+    stratum_sym <- rlang::sym(stratum)
+    data <- data |> 
+      drop_na(!!stratum_sym)
+  
+    classes <- unique(data[[stratum]])
+  
+    models <- map(
+      .x = set_names(classes), 
+      .f = ~ {
+        filtered_data <- data |>  
+        filter(!!stratum_sym == .x)
+        covariates_str <- paste(covariates, collapse = " + ")
+        formula <- as.formula(paste("Surv(follow_up_time, death_all) ~", covariates_str))
+        list(coxph(formula, data = filtered_data))
+      }
+    )
+  } else {
+    covariates_str <- paste(covariates, collapse = " + ")
+    formula <- as.formula(paste("Surv(follow_up_time, death_all) ~", covariates_str))
+    model <- coxph(formula, data = data)
+    models <- model
+  }
+  return(models)
+}
+```
+
+## Other useful functions
+
+### Count number of NA's in a whole dataframe
+
+```{r}
+
+count_df_na <- function(dataframe) {
+  map_df(dataframe, ~ sum(is.na(.x)))
+}
+```
+
+### Calculate person-years
+
+```{r}
+
+calc_person_years <- function(dataframe, group_var = "trajectory_group") {
+  if (!missing(group_var) && (group_var %in% names(dataframe))) {
+    result <- dataframe |> 
+      group_by(!!sym(group_var)) |> 
+      summarise(person_years = sum(follow_up_time, na.rm = TRUE)) |> 
+      ungroup()
+  } else {
+    result <- dataframe |> 
+      summarise(person_years = sum(follow_up_time, na.rm = TRUE))
+  }
+  return(result)
+}
+```
+
+### Calculate event distribution
+
+```{r}
+
+calc_event_dist <- function(dataframe, group_var = "trajectory_group") {
+  if (!missing(group_var) && (group_var %in% names(dataframe))) {
+    result <- dataframe |> 
+      group_by(!!sym(group_var)) |> 
+      count(death_all) |> 
+      ungroup()
+  } else {
+    result <- dataframe |> 
+      count(death_all)
+  }
+  return(result)
+}
+```

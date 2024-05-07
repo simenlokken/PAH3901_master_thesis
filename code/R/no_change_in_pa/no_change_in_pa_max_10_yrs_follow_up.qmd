@@ -1,0 +1,395 @@
+---
+title: "No change in PA w/ maximum follow-up time of 10 years"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+This script contains the analyses for PA as a single baseline measure w/ a maximum follow-up time of 10 years for H1, H3 and H4.
+
+## Set environment and load packages
+
+```{r setup}
+
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r}
+
+library(dplyr)
+library(tibble)
+library(lubridate)
+library(readr)
+library(tidyr)
+library(forcats)
+library(survival)
+library(purrr)
+```
+
+## Load and prepare data
+
+Load data from NTNU server:
+
+```{r}
+
+hunt_1 <- read_parquet("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1.parquet")
+hunt_3 <- read_parquet("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_3.parquet")
+hunt_4 <- read_parquet("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_4.parquet")
+```
+
+Run data processing functions:
+
+```{r}
+
+hunt_1 <- hunt_1 |>  
+  process_hunt_1()
+
+glimpse(hunt_1)
+
+hunt_3 <- hunt_3 |> 
+  process_hunt_3()
+
+glimpse(hunt_3)
+
+hunt_4 <- hunt_4 |> 
+  process_hunt_4()
+
+glimpse(hunt_4)
+```
+
+## Analyses
+
+### Un-stratified
+
+#### H1
+
+##### Crude
+
+```{r}
+
+hunt_1_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age, id = w22_0389_lopenr_person, data = hunt_1)
+
+exp(confint(hunt_1_crude_mod))
+```
+
+##### Multi-adjusted
+
+```{r}
+
+hunt_1_multi_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1)
+
+exp(confint(hunt_1_multi_mod))
+```
+
+##### Follow-up time and incidence rate
+
+```{r}
+
+
+```
+
+#### H3
+
+##### Crude
+
+```{r}
+
+hunt_3_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age, id = w22_0389_lopenr_person, data = hunt_3)
+
+exp(confint(hunt_3_crude_mod))
+```
+
+##### Multi-adjusted
+
+```{r}
+
+hunt_3_multi_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_tot_unit_w_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3)
+
+exp(confint(hunt_3_multi_mod))
+```
+
+##### Follow-up time and incidence rate
+
+```{r}
+
+calc_person_years(hunt_3)
+```
+
+#### H4
+
+##### Crude
+
+```{r}
+
+hunt_4_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age, id = w22_0389_lopenr_person, data = hunt_4)
+
+exp(confint(hunt_4_crude_mod))
+```
+
+##### Multi-adjusted
+
+```{r}
+
+hunt_4_multi_mod <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt4blm + bmi_nt4blm + alc_tot_unit_w_nt4blq1 + smo_stat_nt4blq1, id = w22_0389_lopenr_person, data = hunt_4)
+
+exp(confint(hunt_4_multi_mod))
+```
+
+##### Follow-up time and incidence rate
+
+```{r}
+
+calc_person_years(hunt_4)
+```
+
+### Stratified
+
+#### H1
+
+##### Prepare data for the analyses
+
+```{r}
+
+hunt_1_low <- hunt_1 |> 
+  filter(educ_nt1blq2 == "low")
+
+hunt_1_high <- hunt_1 |> 
+  filter(educ_nt1blq2 == "high")
+```
+
+##### Multi-adjusted
+
+Low:
+
+```{r}
+
+hunt_1_multi_mod_low <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_low)
+
+exp(confint(hunt_1_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_1_multi_mod_high <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_high)
+
+exp(confint(hunt_1_multi_mod_high))
+```
+
+##### Follow-up time and event distribution
+
+Low:
+
+```{r}
+
+calc_person_years(hunt_1_low)
+```
+
+High:
+
+```{r}
+
+calc_person_years(hunt_1_high)
+```
+
+#### H3
+
+##### Prepare data for the analyses
+
+```{r}
+
+hunt_3_low <- hunt_3 |> 
+  filter(wor_tit_isco1_nt3bli == "low")
+
+hunt_3_high <- hunt_3 |> 
+  filter(wor_tit_isco1_nt3bli == "high")
+```
+
+##### Multi-adjusted
+
+Low:
+
+```{r}
+
+hunt_3_multi_mod_low <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_tot_unit_w_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3_low)
+
+exp(confint(hunt_3_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_3_multi_mod_high <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt3blm + bmi_nt3blm + alc_tot_unit_w_nt3blq1 + smo_stat_nt3blq1, id = w22_0389_lopenr_person, data = hunt_3_high)
+
+exp(confint(hunt_3_multi_mod_high))
+```
+
+##### Follow-up time and event distribution
+
+Low:
+
+```{r}
+
+calc_person_years(hunt_3_low)
+```
+
+High:
+
+```{r}
+
+calc_person_years(hunt_3_high)
+```
+
+#### H4
+
+##### Prepare data for the analyses
+
+```{r}
+
+hunt_4_low <- hunt_4 |> 
+  filter(educ_nt4blq1 == "low")
+
+hunt_4_high <- hunt_4 |> 
+  filter(educ_nt4blq1 == "high")
+```
+
+##### Multi-adjusted
+
+Low:
+
+```{r}
+
+hunt_4_multi_mod_low <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt4blm + bmi_nt4blm + alc_tot_unit_w_nt4blq1 + smo_stat_nt4blq1, id = w22_0389_lopenr_person, data = hunt_4_low)
+
+exp(confint(hunt_4_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_4_multi_mod_high <- coxph(Surv(follow_up_time, death_all) ~ ltpa_hrs_per_week + sex + age + bp_syst_mn23_nt4blm + bmi_nt4blm + alc_tot_unit_w_nt4blq1 + smo_stat_nt4blq1, id = w22_0389_lopenr_person, data = hunt_4_high)
+
+exp(confint(hunt_4_multi_mod_high))
+```
+
+##### Follow-up time and event distribution
+
+Low:
+
+```{r}
+
+calc_person_years(hunt_4_low)
+```
+
+High:
+
+```{r}
+
+calc_person_years(hunt_4_high)
+```
+
+### LTPA variable distribution
+
+#### HUNT 1
+
+```{r}
+
+theme_set(theme_minimal())
+
+hunt_1 |> 
+  ggplot(aes(x = ltpa_hrs_per_week)) +
+  geom_histogram(color = "black", fill = "royalblue") +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  labs(
+    title = "Distribution of possible values of LTPA hrs/week",
+    subtitle = "HUNT 1",
+    x = "LTPA hrs/week",
+    y = "Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 7, 0.5)
+  )
+
+ggsave(
+  filename = "C:/Users/simen/Desktop/master_thesis/figures/hunt_1_ltpa_dist.jpg",
+  dpi = 300,
+  height = 8,
+  width = 10
+)
+
+```
+
+#### HUNT 3
+
+```{r}
+
+theme_set(theme_minimal())
+
+hunt_3 |> 
+  ggplot(aes(x = ltpa_hrs_per_week)) +
+  geom_histogram(color = "black", fill = "royalblue") +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  labs(
+    title = "Distribution of possible values of LTPA hrs/week",
+    subtitle = "HUNT 3",
+    x = "LTPA hrs/week",
+    y = "Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 7, 0.5)
+  )
+
+ggsave(
+  filename = "C:/Users/simen/Desktop/master_thesis/figures/hunt_3_ltpa_dist.jpg",
+  dpi = 300,
+  height = 8,
+  width = 10
+)
+```
+
+#### HUNT 4
+
+```{r}
+
+theme_set(theme_minimal())
+
+hunt_4 |> 
+  ggplot(aes(x = ltpa_hrs_per_week)) +
+  geom_histogram(color = "black", fill = "royalblue") +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  labs(
+    title = "Distribution of possible values of LTPA hrs/week",
+    subtitle = "HUNT 4",
+    x = "LTPA hrs/week",
+    y = "Count"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 7, 0.5)
+  )
+
+ggsave(
+  filename = "C:/Users/simen/Desktop/master_thesis/figures/hunt_4_ltpa_dist.jpg",
+  dpi = 300,
+  height = 8,
+  width = 10
+)
+```
+

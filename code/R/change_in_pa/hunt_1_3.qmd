@@ -1,0 +1,167 @@
+---
+title: "HUNT 1-3"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+This script contains the analyses for H1-H3.
+
+## Set environment and load packages
+
+```{r setup}
+
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r}
+
+library(dplyr)
+library(tibble)
+library(lubridate)
+library(tidyr)
+library(readr)
+library(forcats)
+library(survival)
+```
+
+## Process data
+
+Load data that's been processed in Stata:
+
+```{r}
+
+hunt_1_3 <- read_csv("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1_3.csv")
+```
+
+Add a column that holds the trajectory group for each individual:
+
+```{r}
+
+glimpse(hunt_1_3)
+
+hunt_1_3 <- hunt_1_3 |> 
+  process_hunt_1_3() |> 
+  mutate(
+    # Add trajectory groups
+    trajectory_group = as_factor(case_when(
+      ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Low" ~ "Below recommended, below recommended",
+      ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Moderate/high" ~ "Below recommended, recommended",
+      ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Low" ~ "Recommended, Below recommended",
+      ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Moderate/high" ~ "Recommended, recommended")
+  ),
+  # Set reference group
+  trajectory_group = relevel(trajectory_group, ref = "Below recommended, below recommended")
+  )
+```
+
+## Analyses
+
+### Un-stratified
+
+#### Crude Cox regression
+
+```{r}
+
+hunt_1_3_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex, id = w22_0389_lopenr_person, data = hunt_1_3)
+
+exp(confint(hunt_1_3_crude_mod))
+
+```
+
+#### Multi-adjusted Cox regression
+
+```{r}
+
+hunt_1_3_multi_mod <- coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_3)
+
+exp(confint(hunt_1_3_multi_mod))
+```
+
+#### Follow-up time and event distribution
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_1_3, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_1_3, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+### Stratified
+
+Distinguish into two separate data frames on SES:
+
+```{r}
+
+hunt_1_3_low <- hunt_1_3 |> 
+  filter(educ_nt1blq2 == "low")
+
+hunt_1_3_high <- hunt_1_3 |> 
+  filter(educ_nt1blq2 == "high")
+```
+
+### Multi-adjuusted Cox regression
+
+Low:
+
+```{r}
+
+hunt_1_3_multi_mod_low <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_3_low)
+
+exp(confint(hunt_1_3_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_1_3_multi_mod_high <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_3_high)
+
+exp(confint(hunt_1_3_multi_mod_high))
+```
+
+###### Follow-up time and event distribution
+
+Low:
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_1_3_low, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_1_3_low, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+High:
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_1_3_high, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_1_3_high, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+## Descriptive statistics
+

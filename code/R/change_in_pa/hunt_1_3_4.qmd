@@ -1,0 +1,341 @@
+---
+title: "HUNT 1-3-4"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Information
+
+This script contains the analyses for H1-H3-H4.
+
+## Set environment and load packages
+
+```{r setup}
+
+knitr::opts_chunk$set(
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+```{r}
+
+library(dplyr)
+library(tibble)
+library(lubridate)
+library(tidyr)
+library(readr)
+library(forcats)
+library(survival)
+```
+
+## Process data
+
+Load data:
+
+```{r}
+
+hunt_1_3_4 <- read_csv("//fil.nice.ntnu.no/nice/p758/data/my_data/hunt_1_3_4.csv")
+```
+
+Dependent of H3:
+
+```{r}
+
+hunt_1_3_4_dep <- hunt_1_3_4 |> 
+  process_hunt_1_3_4() |> 
+  mutate(
+    trajectory_group = as_factor(case_when(
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Low" ~ "Below recommended, below recommended, below recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Moderate/high" ~ "Below recommended, below recommended, recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Moderate/high" ~ "Below recommended, recommended, recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Low" ~ "Below recommended, recommended, below recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Moderate/high" ~ "Recommended, below recommended, recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Moderate/high" ~ "Recommended, recommended, recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Low" ~ "Recommended, recommended, below recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Low" ~ "Recommended, below recommended, below recommended")
+    ),
+    trajectory_group = relevel(trajectory_group, ref = "Below recommended, below recommended, below recommended")
+  )
+
+glimpse(hunt_1_3_4_dep)
+```
+
+Independent of H3:
+
+```{r}
+
+# Independent of H3
+
+hunt_1_3_4_indep <- hunt_1_3_4 |> 
+  process_hunt_1_3_4() |> 
+  mutate(
+    trajectory_group = as_factor(case_when(
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Low" ~ "Below recommended, below recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Moderate/high" ~ "Below recommended, recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Moderate/high" ~ "Below recommended, recommended",
+        ltpa_group_nt1 == "Low" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Low" ~  "Below recommended, below recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Moderate/high" ~ "Recommended, recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Moderate/high" ~ "Recommended, recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Moderate/high" & ltpa_group_nt4 == "Low" ~ "Recommended, below recommended",
+        ltpa_group_nt1 == "Moderate/high" & ltpa_group_nt3 == "Low" & ltpa_group_nt4 == "Low" ~ "Recommended, below recommended")
+    ),
+    trajectory_group = relevel(trajectory_group, ref = "Below recommended, below recommended")
+  )
+```
+
+## Analyses
+
+### Un-stratified
+
+#### Crude
+
+##### Dependent of H3
+
+```{r}
+
+hunt_1_3_4_dep_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex, id = w22_0389_lopenr_person, data = hunt_1_3_4_dep)
+
+exp(confint(hunt_1_3_4_dep_crude_mod))
+```
+
+##### Independent of H3
+
+```{r}
+
+hunt_1_3_4_indep_crude_mod <- coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex, id = w22_0389_lopenr_person, data = hunt_1_3_4_indep)
+
+exp(confint(hunt_1_3_4_indep_crude_mod))
+```
+
+#### Multi-adjusted
+
+##### Dependent of H3
+
+```{r}
+
+hunt_1_3_4_dep_multi_mod <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_3_4_dep)
+
+exp(confint(hunt_1_3_4_dep_multi_mod))
+```
+
+##### Independent of H3
+
+```{r}
+
+hunt_1_3_4_indep_multi_mod <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person, data = hunt_1_3_4_indep)
+
+exp(confint(hunt_1_3_4_indep_multi_mod))
+```
+
+#### Follow-up time and event distribution
+
+##### Dependent of H3
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_1_3_4_dep, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_1_3_4_dep, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+##### Independent of H3
+
+```{r}
+
+# Person-years
+
+calc_person_years(hunt_1_3_4_indep, group_var = "trajectory_group")
+
+# Event distribution
+
+calc_event_dist(hunt_1_3_4_indep, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+### Stratified
+
+Distinguish the data into two data frames on SES:
+
+```{r}
+  
+# Dependent of H3
+
+hunt_1_3_4_dep_low <- hunt_1_3_4_dep |> 
+  filter(educ_nt1blq2 == "low")
+
+hunt_1_3_4_dep_high <- hunt_1_3_4_dep |> 
+  filter(educ_nt1blq2 == "high")
+```
+
+```{r}
+
+# Independent of H3
+
+hunt_1_3_4_indep_low <- hunt_1_3_4_indep |> 
+  filter(educ_nt1blq2 == "low")
+
+hunt_1_3_4_indep_high <- hunt_1_3_4_indep |> 
+  filter(educ_nt1blq2 == "high")
+```
+
+#### Multi-adjusted
+
+##### Dependent of H3
+
+Low:
+
+```{r}
+
+hunt_1_3_4_dep_multi_mod_low <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person , data = hunt_1_3_4_dep_low)
+
+exp(confint(hunt_1_3_4_dep_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_1_3_4_dep_multi_mod_high <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person , data = hunt_1_3_4_dep_high)
+
+exp(confint(hunt_1_3_4_dep_multi_mod_high))
+```
+
+##### Independent of H3
+
+Low:
+
+```{r}
+
+hunt_1_3_4_indep_multi_mod_low <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person , data = hunt_1_3_4_indep_low)
+
+exp(confint(hunt_1_3_4_indep_multi_mod_low))
+```
+
+High:
+
+```{r}
+
+hunt_1_3_4_indep_multi_mod_high <- 
+  coxph(Surv(follow_up_time, death_all) ~ trajectory_group + age + sex + bp_syst2_nt1blm + bmi_nt1blm + alc_fl2w_nt1blq2 + smo_stat_nt1blq2, id = w22_0389_lopenr_person , data = hunt_1_3_4_indep_high)
+
+exp(confint(hunt_1_3_4_indep_multi_mod_high))
+```
+
+#### Follow-up time and event distribution
+
+##### Dependent of H3
+
+Low:
+
+```{r}
+
+calc_person_years(hunt_1_3_4_dep_low, group_var = "trajectory_group")
+
+calc_event_dist(hunt_1_3_4_dep_low, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+High:
+
+```{r}
+
+calc_person_years(hunt_1_3_4_dep_high, group_var = "trajectory_group")
+
+calc_event_dist(hunt_1_3_4_dep_high, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+##### Independent of H3
+
+Low:
+
+```{r}
+
+calc_person_years(hunt_1_3_4_indep_low, group_var = "trajectory_group")
+
+calc_event_dist(hunt_1_3_4_indep_low, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+High:
+
+```{r}
+
+calc_person_years(hunt_1_3_4_indep_high, group_var = "trajectory_group")
+
+calc_event_dist(hunt_1_3_4_indep_high, group_var = "trajectory_group") |> 
+  filter(death_all == 1)
+```
+
+## Descriptive statistics
+
+Total number in each SES strata:
+
+```{r}
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |> 
+  count()
+```
+
+Categorical statistics:
+
+```{r}
+
+# Sex distribution
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |> 
+  count(sex)
+
+# Daily smokers
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |> 
+  count(smo_stat_nt1blq2)
+
+# Alcohol abstainer
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |> 
+  count(alc_fl2w_nt1blq2)
+
+# Consistently below recommended
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |> 
+  count(trajectory_group)
+
+# Consistently recommended
+  
+```
+
+Continuous statistics:
+
+```{r}
+
+hunt_1_3_4_dep |> 
+  group_by(educ_nt1blq2) |>
+  summarise(
+    mean_age = mean(age),
+    sd_age = sd(age),
+    mean_sbp = mean(bp_syst2_nt1blm),
+    sd_sbp = sd(bp_syst2_nt1blm),
+    mean_bmi = mean(bmi_nt1blm),
+    sd_bmi = sd(bmi_nt1blm)
+  )
+```
+
